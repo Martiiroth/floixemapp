@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "1038216231838",
+    "project_id": "floixemapp-b8281",
+    "storage_bucket": "floixemapp-b8281.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1038216231838:android:f918f8a083d836ab52748f",
+        "android_client_info": {
+          "package_name": "com.example.floixemapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1038216231838-s3hu09mvs2kum1dp50eue3n4gd98egjb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.floixemapp",
+            "certificate_hash": "7f8352eadd33967f766c30a54f2d72b6ded869f2"
+          }
+        },
+        {
+          "client_id": "1038216231838-oe22thq525kc85skne78jo04gmg2m5bb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBrDVTRstNEHzU8dWp0PiL9YZ2bX_zzKWw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1038216231838-oe22thq525kc85skne78jo04gmg2m5bb.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1038216231838-5il28dcni0k0qsguedn0ekmp5om3uc3f.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.floixemapp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

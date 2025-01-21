@@ -1,0 +1,39 @@
+name: floixemapp
+description: "A new Flutter project."
+
+publish_to: 'none' 
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.3 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+ 
+  cupertino_icons: ^1.0.2
+  firebase_core: ^2.26.0
+  firebase_auth: ^4.17.7
+  google_sign_in: ^6.2.2
+  shared_preferences: ^2.1.1
+  connectivity_plus: ^4.0.1
+  image_picker: ^0.8.7+5
+  path_provider: ^2.0.12
+  url_launcher: ^6.1.7
+  googleapis: ^11.0.0
+  http: ^0.13.5
+  archive: ^3.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^2.0.0
+
+flutter:
+  assets:
+    - lib/images/
+  uses-material-design: true
+
+  
