@@ -1,19 +1,6 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
@@ -29,10 +16,34 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
+  <!-- Configuración del Client ID para Google Sign-In -->
+  <meta name="google-signin-client_id" content="1038216231838-oe22thq525kc85skne78jo04gmg2m5bb.apps.googleusercontent.com">
+
   <title>floixemapp</title>
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
-  <script src="flutter_bootstrap.js" async></script>
+<!-- Agrega la configuración de Firebase aquí -->
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js"></script>
+<script>
+  // Configuración de Firebase
+  const firebaseConfig = {
+    apiKey: "AIzaSyAN_O1ShKuWd6mKs1y0y-qod8qaG0dGzw0",
+    authDomain: "floixemapp-b8281.firebaseapp.com",
+    projectId: "floixemapp-b8281",
+    storageBucket: "floixemapp-b8281.firebasestorage.app",
+    messagingSenderId: "1038216231838",
+    appId: "1:1038216231838:web:650d85b8cfb5ab0e52748f",
+    measurementId: "G-0RBVSGF2B7"
+  };
+
+  // Inicializa Firebase
+  firebase.initializeApp(firebaseConfig);
+</script>
+
+<!-- Script de Flutter -->
+<script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

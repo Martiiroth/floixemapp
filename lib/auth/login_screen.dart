@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:floixemapp/auth/auth_service.dart';
 import 'package:floixemapp/home_screen.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:connectivity_plus/connectivity_plus.dart'; // Importa connectivity_plus
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -22,38 +22,44 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final connectivityResult = await Connectivity().checkConnectivity();
       if (connectivityResult != ConnectivityResult.none) {
+        // Si hay conexión a Internet, intenta iniciar sesión con Google
         final user = await _auth.signInWithGoogle();
-        if (user != null) {
+        if (user != null && mounted) {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const HomeScreen()),
           );
-        } else {
+        } else if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Error al iniciar sesión con Google.")),
           );
         }
       } else {
+        // Si no hay conexión a Internet, verifica si hay datos locales
         final isLoggedIn = await _auth.isUserLoggedInOffline();
-        if (isLoggedIn) {
+        if (isLoggedIn && mounted) {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const HomeScreen()),
           );
-        } else {
+        } else if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("No se encontraron datos locales.")),
           );
         }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error durante el inicio de sesión: $e")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error durante el inicio de sesión: $e")),
+        );
+      }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -95,7 +101,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   child: const Text(
-                    "login with Google",
+                    "Login with Google",
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,

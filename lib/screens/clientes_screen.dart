@@ -1,8 +1,7 @@
-import 'dart:io';
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
-import 'visitas_cliente_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Para Firestore
+import 'package:firebase_auth/firebase_auth.dart'; // Para obtener el usuario autenticado
+import 'visitas_cliente_screen.dart'; // Importa la pantalla de visitas
 
 class ClientesScreen extends StatefulWidget {
   const ClientesScreen({Key? key}) : super(key: key);
@@ -12,107 +11,85 @@ class ClientesScreen extends StatefulWidget {
 }
 
 class _ClientesScreenState extends State<ClientesScreen> {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance; // Instancia de Firestore
+  final FirebaseAuth _auth = FirebaseAuth.instance; // Instancia de FirebaseAuth
+  final TextEditingController _busquedaController = TextEditingController();
   List<Map<String, dynamic>> _clientes = [];
   List<Map<String, dynamic>> _clientesFiltrados = [];
-  final TextEditingController _busquedaController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _listarClientes();
+    _cargarClientes(); // Cargar clientes al iniciar la pantalla
   }
 
-  /// Listar los clientes y cargar datos desde datos_cliente.json en cada carpeta
-  /// convirtiendo "direccion" (string) a "direcciones" (lista) si es necesario.
-  Future<void> _listarClientes() async {
+  /// Cargar clientes desde Firestore
+  Future<void> _cargarClientes() async {
     try {
-      final directory = await getApplicationDocumentsDirectory();
-      final clientesPath = '${directory.path}/Clientes';
-      final clientesDir = Directory(clientesPath);
-
-      if (!await clientesDir.exists()) {
-        await clientesDir.create(recursive: true);
-      }
-
-      final clientes = <Map<String, dynamic>>[];
-
-      // Para cada subcarpeta de "Clientes", buscamos "datos_cliente.json"
-      for (var clienteDir in clientesDir.listSync().whereType<Directory>()) {
-        final clienteFile = File('${clienteDir.path}/datos_cliente.json');
-        if (await clienteFile.exists()) {
-          final contenido = await clienteFile.readAsString();
-          if (contenido.isEmpty) continue;
-
-          final clienteData = jsonDecode(contenido) as Map<String, dynamic>;
-
-          // Asegurarnos de que "direcciones" sea una lista
-          // 1) Si existe 'direccion' de tipo String y NO existe 'direcciones', migrar
-          if (clienteData.containsKey('direccion') &&
-              clienteData['direccion'] is String &&
-              !clienteData.containsKey('direcciones')) {
-            final dirUnica = (clienteData['direccion'] as String).trim();
-            if (dirUnica.isNotEmpty) {
-              clienteData['direcciones'] = [dirUnica];
-            } else {
-              clienteData['direcciones'] = <String>[];
-            }
-            // Puedes eliminar la clave 'direccion' o conservarla para compatibilidad
-            clienteData.remove('direccion');
-          }
-
-          // 2) Si 'direcciones' no existe, la creamos vacía
-          if (!clienteData.containsKey('direcciones')) {
-            clienteData['direcciones'] = <String>[];
-          } else {
-            // Convertimos a List<String> por si acaso
-            clienteData['direcciones'] = List<String>.from(clienteData['direcciones']);
-          }
-
-          clientes.add(clienteData);
+      final user = _auth.currentUser;
+      if (user == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Usuario no autenticado")),
+          );
         }
+        return;
       }
+
+      final userId = user.uid;
+      QuerySnapshot querySnapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('clientes')
+          .get();
 
       setState(() {
-        _clientes = clientes;
-        _clientesFiltrados = List.from(clientes);
+        _clientes = querySnapshot.docs.map((doc) {
+          return {
+            'id': doc.id, // ID del documento
+            ...doc.data() as Map<String, dynamic>, // Datos del cliente
+          };
+        }).toList();
+        _clientesFiltrados = List.from(_clientes); // Inicialmente, mostrar todos los clientes
       });
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error al listar clientes: $e")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error al cargar clientes: $e")),
+        );
+      }
     }
   }
 
-  /// Filtrar clientes según nombre, teléfono o direcciones (todas unidas como string).
+  /// Filtrar clientes por nombre, teléfono o direcciones
   void _filtrarClientes(String texto) {
     setState(() {
       if (texto.isEmpty) {
-        _clientesFiltrados = List.from(_clientes);
+        _clientesFiltrados = List.from(_clientes); // Mostrar todos los clientes si no hay texto
       } else {
         final busqueda = texto.toLowerCase();
         _clientesFiltrados = _clientes.where((cliente) {
           final nombre = (cliente['nombre'] ?? '').toLowerCase();
           final telefono = (cliente['telefono'] ?? '').toLowerCase();
-          // Unimos todas las direcciones en un string
-          final direcciones = (cliente['direcciones'] ?? <String>[]) as List<String>;
+          final direcciones = (cliente['direcciones'] ?? <dynamic>[]).cast<String>();
           final direccionesStr = direcciones.join(' ').toLowerCase();
 
-          return nombre.contains(busqueda)
-              || telefono.contains(busqueda)
-              || direccionesStr.contains(busqueda);
+          return nombre.contains(busqueda) ||
+              telefono.contains(busqueda) ||
+              direccionesStr.contains(busqueda);
         }).toList();
       }
     });
   }
 
-  /// Editar datos de un cliente con múltiples direcciones
+  /// Editar un cliente
   Future<void> _editarCliente(Map<String, dynamic> cliente) async {
     final nombreController = TextEditingController(text: cliente['nombre']);
     final telefonoController = TextEditingController(text: cliente['telefono']);
     final emailController = TextEditingController(text: cliente['email']);
 
-    // Unimos las direcciones en un campo multilinea
-    final direcciones = (cliente['direcciones'] ?? <String>[]) as List<String>;
+    // Unir las direcciones en un campo multilínea
+    final direcciones = (cliente['direcciones'] ?? <dynamic>[]).cast<String>();
     final direccionesController = TextEditingController(
       text: direcciones.join('\n'),
     );
@@ -142,7 +119,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
                   keyboardType: TextInputType.emailAddress,
                 ),
                 const SizedBox(height: 8),
-                // Múltiples direcciones en multilinea
+                // Múltiples direcciones en multilínea
                 TextField(
                   controller: direccionesController,
                   decoration: const InputDecoration(
@@ -160,40 +137,38 @@ class _ClientesScreenState extends State<ClientesScreen> {
             ),
             ElevatedButton(
               onPressed: () async {
-                // Actualiza el Map local con los nuevos datos
+                // Actualizar el cliente en Firestore
                 final nuevoNombre = nombreController.text.trim();
                 final nuevoTelefono = telefonoController.text.trim();
                 final nuevoEmail = emailController.text.trim();
 
-                // Separamos por saltos de línea para obtener la lista de direcciones
+                // Separar por saltos de línea para obtener la lista de direcciones
                 final nuevasDirecciones = direccionesController.text
                     .split('\n')
                     .map((e) => e.trim())
                     .where((e) => e.isNotEmpty)
                     .toList();
 
-                cliente['nombre'] = nuevoNombre;
-                cliente['telefono'] = nuevoTelefono;
-                cliente['email'] = nuevoEmail;
-                cliente['direcciones'] = nuevasDirecciones;
+                final user = _auth.currentUser;
+                if (user != null) {
+                  final userId = user.uid;
+                  await _firestore
+                      .collection('users')
+                      .doc(userId)
+                      .collection('clientes')
+                      .doc(cliente['id'])
+                      .update({
+                    'nombre': nuevoNombre,
+                    'telefono': nuevoTelefono,
+                    'email': nuevoEmail,
+                    'direcciones': nuevasDirecciones,
+                  });
 
-                // Guardar en disco
-                final directory = await getApplicationDocumentsDirectory();
-                final clientePath = '${directory.path}/Clientes/$nuevoTelefono';
-                final clienteDir = Directory(clientePath);
-
-                // Crear carpeta si no existe (p.ej. si se cambió el teléfono)
-                if (!await clienteDir.exists()) {
-                  await clienteDir.create(recursive: true);
+                  setState(() {
+                    _cargarClientes(); // Recargar la lista de clientes después de editar
+                  });
+                  Navigator.of(context).pop();
                 }
-
-                final clienteFile = File('$clientePath/datos_cliente.json');
-                await clienteFile.writeAsString(jsonEncode(cliente));
-
-                setState(() {
-                  _listarClientes();
-                });
-                Navigator.of(context).pop();
               },
               child: const Text("Guardar"),
             ),
@@ -203,8 +178,8 @@ class _ClientesScreenState extends State<ClientesScreen> {
     );
   }
 
-  /// Eliminar cliente
-  Future<void> _eliminarCliente(String telefono) async {
+  /// Eliminar un cliente
+  Future<void> _eliminarCliente(String id) async {
     final confirm = await showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -224,17 +199,19 @@ class _ClientesScreenState extends State<ClientesScreen> {
     );
 
     if (confirm == true) {
-      final directory = await getApplicationDocumentsDirectory();
-      final clientePath = '${directory.path}/Clientes/$telefono';
-      final clienteDir = Directory(clientePath);
-
-      if (await clienteDir.exists()) {
-        await clienteDir.delete(recursive: true);
+      final user = _auth.currentUser;
+      if (user != null) {
+        final userId = user.uid;
+        await _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('clientes')
+            .doc(id)
+            .delete();
+        setState(() {
+          _cargarClientes(); // Recargar la lista de clientes después de eliminar
+        });
       }
-
-      setState(() {
-        _listarClientes();
-      });
     }
   }
 
@@ -242,17 +219,14 @@ class _ClientesScreenState extends State<ClientesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          "Clientes",
-          style: TextStyle(color: Colors.white), // Título en blanco
-        ),
-        centerTitle: true, // Centrar el título
-        backgroundColor: Colors.red,
-        iconTheme: const IconThemeData(
-          color: Colors.white, // Flecha "back" en blanco
-        ),
+        title: const Text('Clientes'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _cargarClientes, // Botón para recargar clientes
+          ),
+        ],
       ),
-
       body: Column(
         children: [
           // Barra de búsqueda
@@ -278,41 +252,42 @@ class _ClientesScreenState extends State<ClientesScreen> {
                 final cliente = _clientesFiltrados[index];
                 final nombre = cliente['nombre'] ?? 'Sin Nombre';
                 final telefono = cliente['telefono'] ?? 'Sin Teléfono';
-                final direcciones = (cliente['direcciones'] ?? []) as List<String>;
-
-                // Unir las direcciones con salto de línea o coma
+                final direcciones = (cliente['direcciones'] ?? <dynamic>[]).cast<String>();
                 final direccionesStr = direcciones.isNotEmpty
                     ? direcciones.join(', ')
                     : 'Sin direcciones';
 
-                return ListTile(
-                  title: Text(nombre),
-                  subtitle: Text("Tel: $telefono\nDir: $direccionesStr"),
-                  isThreeLine: true,
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit),
-                        onPressed: () => _editarCliente(cliente),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete),
-                        onPressed: () => _eliminarCliente(telefono),
-                      ),
-                    ],
-                  ),
-                  onTap: () {
-                    // Navegar a la pantalla de visitas del cliente
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => VisitasClienteScreen(
-                          telefono: telefono,
+                return Card(
+                  margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                  child: ListTile(
+                    title: Text(nombre),
+                    subtitle: Text("Tel: $telefono\nDir: $direccionesStr"),
+                    isThreeLine: true,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit),
+                          onPressed: () => _editarCliente(cliente),
                         ),
-                      ),
-                    );
-                  },
+                        IconButton(
+                          icon: const Icon(Icons.delete),
+                          onPressed: () => _eliminarCliente(cliente['id']),
+                        ),
+                      ],
+                    ),
+                    onTap: () {
+                      // Navegar a la pantalla de visitas del cliente
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => VisitasClienteScreen(
+                            telefono: telefono, // Pasar el teléfono del cliente
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 );
               },
             ),
