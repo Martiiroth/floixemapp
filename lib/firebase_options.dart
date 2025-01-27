@@ -45,7 +45,7 @@ class DefaultFirebaseOptions {
     appId: '1:1038216231838:web:650d85b8cfb5ab0e52748f',
     messagingSenderId: '1038216231838',
     projectId: 'floixemapp-b8281',
-    authDomain: 'floixemapp-b8281.firebaseapp.com',
+    authDomain: 'lacasadelsueloradianteapp.com',
     storageBucket: 'floixemapp-b8281.firebasestorage.app',
     measurementId: 'G-0RBVSGF2B7',
   );

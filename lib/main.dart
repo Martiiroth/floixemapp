@@ -1,36 +1,37 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+
+// Clases propias
 import 'package:floixemapp/auth/auth_service.dart';
+import 'package:floixemapp/models/user.dart';
 import 'package:floixemapp/auth/login_screen.dart';
 import 'package:floixemapp/home_screen.dart';
-import 'package:floixemapp/models/user.dart'; // Importa el modelo User
-import 'firebase_options.dart'; // Importa las opciones de Firebase
-import 'package:url_strategy/url_strategy.dart'; // Importa el paquete url_strategy
-import 'package:flutter/foundation.dart' show kIsWeb; // Para detectar si es web
+
+// Opciones de Firebase generadas por flutterfire configure
+import 'firebase_options.dart';
+
+// Para eliminar el # de la URL en Flutter Web
+import 'package:url_strategy/url_strategy.dart';
 
 void main() async {
-  // Elimina el # de las URLs en Flutter Web
+  // Elimina el # en las URL de Flutter Web
   setPathUrlStrategy();
 
-  // Asegura que Flutter esté inicializado antes de ejecutar cualquier cosa
+  // Asegura la inicialización de Flutter
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inicializa Firebase con las opciones específicas de la plataforma
+  // Inicializa Firebase con las opciones generadas
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Inicializa Hive
+  // Inicializa Hive e registra el adaptador para User
   await Hive.initFlutter();
-
-  // Registra el adaptador para el modelo User
   Hive.registerAdapter(UserAdapter());
-
-  // Abre la caja (box) para almacenar datos de usuario
   await Hive.openBox<User>('userBox');
 
-  // Ejecuta la aplicación
   runApp(const MyApp());
 }
 
@@ -40,23 +41,23 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Floixem App', // Título de la aplicación
+      title: 'La casa del suelo radiante app',
       theme: ThemeData(
-        primarySwatch: Colors.deepOrange, // Color principal de la aplicación
-        scaffoldBackgroundColor: Colors.white, // Fondo de las pantallas
+        primarySwatch: Colors.deepOrange,
+        scaffoldBackgroundColor: Colors.white,
       ),
-      // Rutas de la aplicación
+      // Definimos rutas
       routes: {
-        '/login': (context) => const LoginScreen(), // Pantalla de inicio de sesión
-        '/home': (context) => const HomeScreen(),   // Pantalla principal
+        '/login': (_) => const LoginScreen(),
+        '/home': (_) => const HomeScreen(),
       },
-      // Ruta inicial (depende del estado de autenticación y la plataforma)
+      // La pantalla inicial dependerá de la autenticación
       home: AuthWrapper(),
     );
   }
 }
 
-/// Widget que maneja la lógica de autenticación
+/// Widget que envuelve la lógica de ver si hay sesión o no
 class AuthWrapper extends StatelessWidget {
   final AuthService _authService = AuthService();
 
@@ -65,41 +66,50 @@ class AuthWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<bool>(
-      future: _checkAuthState(), // Verifica el estado de autenticación
+      future: _checkAuthState(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          // Muestra un indicador de carga mientras se verifica el estado de autenticación
+          // Muestra un loader mientras verifica
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         } else if (snapshot.hasError) {
-          // Muestra un mensaje de error si ocurre un problema
+          // Muestra un mensaje de error si algo sale mal
           return Scaffold(
             body: Center(child: Text("Error: ${snapshot.error}")),
           );
-        } else if (snapshot.data == true) {
-          // Si el usuario está autenticado, redirige a la pantalla principal
-          return const HomeScreen();
         } else {
-          // Si el usuario no está autenticado, redirige a la pantalla de inicio de sesión
-          return const LoginScreen();
+          // snapshot.data es true/false
+          final isLoggedIn = snapshot.data ?? false;
+          if (isLoggedIn) {
+            // Si hay sesión en Firebase, ir a Home
+            return const HomeScreen();
+          } else {
+            // Si no hay sesión, ir a Login
+            return const LoginScreen();
+          }
         }
       },
     );
   }
 
-  /// Verifica el estado de autenticación
+  /// Verifica si hay usuario logueado. En Web ignoramos el offline.
   Future<bool> _checkAuthState() async {
+    // Si estamos en Web, solo confiar en FirebaseAuth (online)
     if (kIsWeb) {
-      // En la web, no forzar el cierre de sesión al cargar la aplicación
-      final isLoggedInOnline = await _authService.isUserLoggedInOnline();
-      final isLoggedInOffline = await _authService.isUserLoggedInOffline();
-      return isLoggedInOnline || isLoggedInOffline;
+      final currentUser = _authService.auth.currentUser;
+      if (currentUser == null) {
+        // Borramos cualquier usuario local para no confundir
+        await _authService.clearLocalUser();
+        return false;
+      } else {
+        return true;
+      }
     } else {
-      // En móviles, permitir el inicio de sesión offline
-      final isLoggedInOnline = await _authService.isUserLoggedInOnline();
-      final isLoggedInOffline = await _authService.isUserLoggedInOffline();
-      return isLoggedInOnline || isLoggedInOffline;
+      // En móvil combinamos online y offline
+      final isOnline = await _authService.isUserLoggedInOnline();
+      final isOffline = await _authService.isUserLoggedInOffline();
+      return isOnline || isOffline;
     }
   }
 }

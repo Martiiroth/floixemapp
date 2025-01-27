@@ -1,38 +1,48 @@
 import 'dart:developer';
 import 'dart:io';
 import 'dart:js' as js; // Para integración con JavaScript en Flutter Web
+
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:floixemapp/models/user.dart'; // Tu modelo User
+import 'package:floixemapp/models/user.dart'; 
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
-import 'package:flutter/foundation.dart' show kIsWeb; // Para detectar si es web
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class AuthService {
+  // Instancia de FirebaseAuth
   final firebase_auth.FirebaseAuth _auth = firebase_auth.FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn.standard(scopes: [drive.DriveApi.driveFileScope]);
+
+  // Getter para exponer la instancia si se necesita en otro lado
+  firebase_auth.FirebaseAuth get auth => _auth;
+
+  // GoogleSignIn con scope de Drive (opcional)
+  final GoogleSignIn _googleSignIn = GoogleSignIn.standard(
+    scopes: [drive.DriveApi.driveFileScope],
+  );
 
   AuthService() {
-    _setPersistence(); // Configurar la persistencia
+    _setPersistence(); 
     if (kIsWeb) {
-      _setupBeforeUnloadListener(); // Configurar el listener para el cierre de la pestaña
+      _setupBeforeUnloadListener();
     }
   }
 
-  /// Obtener la caja de Hive ya abierta
+  /// Caja de Hive para almacenar el usuario
   Box<User> get _userBox => Hive.box<User>('userBox');
 
-  /// Configurar la persistencia de Firebase
+  /// Configura la persistencia de la sesión en Firebase
   Future<void> _setPersistence() async {
     if (kIsWeb) {
-      await _auth.setPersistence(firebase_auth.Persistence.SESSION); // Sesión solo en la web
+      await _auth.setPersistence(firebase_auth.Persistence.SESSION);
     } else {
-      await _auth.setPersistence(firebase_auth.Persistence.LOCAL); // Persistencia local en móviles
+      await _auth.setPersistence(firebase_auth.Persistence.LOCAL);
     }
   }
 
-  /// Configurar el listener para el cierre de la pestaña (solo en la web)
+  /// Listener para cuando el usuario cierra la pestaña (Web):
+  /// borra cookies y fuerza el cierre de sesión
   void _setupBeforeUnloadListener() {
     js.context.callMethod('eval', [
       '''
@@ -63,7 +73,12 @@ class AuthService {
     }
   }
 
-  /// Obtener datos del usuario almacenados localmente desde Hive
+  /// Borrar datos locales del usuario (si es que existen)
+  Future<void> clearLocalUser() async {
+    await _userBox.delete('currentUser');
+  }
+
+  /// Obtener datos del usuario almacenados localmente (modo offline)
   Future<User?> getUserFromLocal() async {
     try {
       final hiveUser = _userBox.get('currentUser');
@@ -96,6 +111,7 @@ class AuthService {
     try {
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) {
+        // El usuario canceló el flujo de autenticación
         log("Inicio de sesión cancelado por el usuario.");
         return null;
       }
@@ -106,11 +122,12 @@ class AuthService {
         idToken: googleAuth.idToken,
       );
 
-      final firebase_auth.UserCredential userCredential = await _auth.signInWithCredential(credential);
+      final firebase_auth.UserCredential userCredential =
+          await _auth.signInWithCredential(credential);
       final user = userCredential.user;
 
       if (user != null) {
-        await saveUserLocally(user); // Guardar datos localmente en Hive
+        await saveUserLocally(user); 
         log("Inicio de sesión exitoso: ${user.displayName}");
       }
       return user;
@@ -123,13 +140,19 @@ class AuthService {
   /// Cerrar sesión (y borrar datos locales)
   Future<void> signout() async {
     try {
-      await _auth.signOut(); // Cerrar sesión en Firebase
+      // Cerrar sesión en Firebase
+      await _auth.signOut();
+
+      // Cerrar sesión de Google si existe
       if (await _googleSignIn.isSignedIn()) {
-        await _googleSignIn.signOut(); // Cerrar sesión en Google
+        await _googleSignIn.signOut();
       }
-      await _userBox.delete('currentUser'); // Borrar datos locales del usuario
+
+      // Borrar datos locales del usuario
+      await _userBox.delete('currentUser');
+
       if (kIsWeb) {
-        _deleteCookies(); // Borrar cookies solo en la web
+        _deleteCookies();
       }
       log("Usuario desconectado y datos locales eliminados.");
     } catch (e, stackTrace) {
@@ -152,23 +175,7 @@ class AuthService {
     }
   }
 
-  /// Refrescar el token de acceso de Google
-  Future<void> refreshGoogleToken() async {
-    try {
-      if (await _googleSignIn.isSignedIn()) {
-        final googleUser = await _googleSignIn.signInSilently();
-        if (googleUser != null) {
-          final googleAuth = await googleUser.authentication;
-          log("Token de acceso refrescado: ${googleAuth.accessToken}");
-        }
-      }
-    } catch (e, stackTrace) {
-      log("Error al refrescar el token de Google: $e", stackTrace: stackTrace);
-      throw Exception("Error al refrescar el token de Google.");
-    }
-  }
-
-  /// Subir un archivo a Google Drive
+  /// Subir un archivo a Google Drive (requiere dart:io => no disponible en Web)
   Future<String?> uploadFileToDrive(File file) async {
     try {
       final googleUser = await _googleSignIn.signInSilently();
@@ -178,7 +185,6 @@ class AuthService {
 
       final googleAuth = await googleUser.authentication;
       final accessToken = googleAuth.accessToken;
-
       if (accessToken == null) {
         throw Exception("Token de acceso no disponible.");
       }
@@ -186,11 +192,15 @@ class AuthService {
       final authClient = GoogleAuthClient(accessToken);
       final driveApi = drive.DriveApi(authClient);
 
+      // Verificar o crear la carpeta 'FloixemApp'
       const folderName = 'FloixemApp';
-      final folderQuery = "name = '$folderName' and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
-      final folderResponse = await driveApi.files.list(q: folderQuery, spaces: 'drive');
+      final folderQuery = "name = '$folderName' "
+          "and mimeType = 'application/vnd.google-apps.folder' "
+          "and trashed = false";
 
+      final folderResponse = await driveApi.files.list(q: folderQuery, spaces: 'drive');
       String folderId;
+
       if (folderResponse.files != null && folderResponse.files!.isNotEmpty) {
         folderId = folderResponse.files!.first.id!;
       } else {
@@ -201,13 +211,19 @@ class AuthService {
         folderId = createdFolder.id!;
       }
 
+      // Configurar metadatos del archivo
       final fileMetadata = drive.File()
         ..name = 'archivo_${DateTime.now().millisecondsSinceEpoch}.jpg'
         ..parents = [folderId];
 
+      // Subir archivo
       final media = drive.Media(file.openRead(), file.lengthSync());
-      final uploadedFile = await driveApi.files.create(fileMetadata, uploadMedia: media);
+      final uploadedFile = await driveApi.files.create(
+        fileMetadata,
+        uploadMedia: media,
+      );
 
+      // Dar permiso público de lectura
       await driveApi.permissions.create(
         drive.Permission()
           ..type = 'anyone'
@@ -215,6 +231,7 @@ class AuthService {
         uploadedFile.id!,
       );
 
+      // Generar URL pública para ver el archivo
       final publicUrl = 'https://drive.google.com/uc?export=view&id=${uploadedFile.id}';
       return publicUrl;
     } catch (e, stackTrace) {
@@ -224,7 +241,7 @@ class AuthService {
   }
 }
 
-/// Cliente personalizado para autenticar las solicitudes a la API de Google Drive
+/// Cliente personalizado para Google Drive
 class GoogleAuthClient extends http.BaseClient {
   final String _accessToken;
   final http.Client _client = http.Client();
